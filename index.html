@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>vrtlbio</title>
+  <meta name="description" content="Data for virtual cells.">
+  <meta property="og:title" content="vrtlbio">
+  <meta property="og:description" content="Data for virtual cells.">
+  <meta property="og:image" content="assets/logo.png">
+  <meta name="theme-color" content="#000000">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <style>
+    :root {
+      --bg: #000;
+      --text: #f3f6f1;
+      --green: #1fe000;
+      --muted: #8a9386;
+      --pad: clamp(1.25rem, 4vw, 3rem);
+      color-scheme: dark;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html { background: var(--bg); -webkit-text-size-adjust: 100%; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      min-height: 100svh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      padding: var(--pad);
+      color: var(--text);
+      font-family: "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    ::selection { background: var(--green); color: #000; }
+
+    #strands {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 1.125rem;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+    }
+
+    .brand img { display: block; width: 2.5rem; height: 2.5rem; }
+
+    main {
+      align-self: end;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      align-items: last baseline;
+      justify-content: space-between;
+      gap: 1.5rem 2rem;
+      padding-top: 3rem;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2.75rem, 16vw, 11rem);
+      font-weight: 500;
+      line-height: 0.92;
+      letter-spacing: -0.05em;
+    }
+
+    h1 span { display: block; }
+    h1 .green { color: var(--green); }
+
+    .contact { margin: 0; color: var(--muted); font-size: 0.9375rem; line-height: 1.4; }
+    .contact a { color: var(--text); text-decoration: none; }
+    .contact a:hover { color: var(--green); }
+    .contact a:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; border-radius: 2px; }
+  </style>
+</head>
+<body>
+  <canvas id="strands" aria-hidden="true"></canvas>
+
+  <header class="brand">
+    <img src="assets/logo.png" alt="" width="80" height="80">
+    vrtlbio
+  </header>
+
+  <main>
+    <h1><span>Data for</span> <span class="green">virtual cells.</span></h1>
+    <p class="contact">Interested in more? Contact <a href="mailto:dieter@vrtl.bio">dieter@vrtl.bio</a></p>
+  </main>
+
+  <script>
+    // Background: slowly turning DNA strands drawn on a canvas.
+    (() => {
+      const canvas = document.getElementById('strands');
+      const ctx = canvas.getContext('2d');
+      const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+      const TAU = Math.PI * 2;
+      let w = 0, h = 0;
+
+      // from/to are fractions of the viewport, so every strand starts and ends off screen.
+      const strands = [
+        { from: [1.10, 0.70], to: [0.30, -0.14], size: 1.00, alpha: 1.00, spin: 0.50, phase: 0.0 },
+        { from: [1.08, 0.24], to: [0.62, -0.12], size: 0.42, alpha: 0.30, spin: -0.38, phase: 2.1 },
+        { from: [0.66, -0.10], to: [-0.08, 0.30], size: 0.30, alpha: 0.20, spin: 0.32, phase: 4.4 }
+      ];
+
+      function resize() {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        w = window.innerWidth;
+        h = window.innerHeight;
+        canvas.width = Math.round(w * dpr);
+        canvas.height = Math.round(h * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+
+      function line(x0, y0, x1, y1, width, alpha) {
+        ctx.strokeStyle = `rgba(31, 224, 0, ${alpha})`;
+        ctx.lineWidth = width;
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+      }
+
+      function drawStrand(s, time) {
+        const x0 = s.from[0] * w, y0 = s.from[1] * h;
+        const dx = s.to[0] * w - x0, dy = s.to[1] * h - y0;
+        const length = Math.hypot(dx, dy);
+        const ux = dx / length, uy = dy / length;   // along the strand
+        const nx = -uy, ny = ux;                    // across it
+
+        const radius = Math.max(24, Math.min(w, h) * 0.085) * s.size;
+        const turn = radius * 4.6;                  // length of one full twist
+        const step = 5;
+        const count = Math.ceil(length / step);
+        const rungEvery = Math.max(2, Math.round(turn / 12 / step));
+        const sway = Math.min(w, h) * 0.07;
+
+        const points = [];
+        for (let i = 0; i <= count; i++) {
+          const d = i * step;
+          const bend = Math.sin((d / length) * Math.PI * 1.4 + time * 0.1 + s.phase) * sway;
+          const cx = x0 + ux * d + nx * bend;
+          const cy = y0 + uy * d + ny * bend;
+          const angle = (d / turn) * TAU + time * s.spin + s.phase;
+          const side = Math.sin(angle) * radius;
+          const depth = (Math.cos(angle) + 1) / 2;  // 0 = far, 1 = near
+          points.push({
+            ax: cx + nx * side, ay: cy + ny * side, ad: depth,
+            bx: cx - nx * side, by: cy - ny * side, bd: 1 - depth
+          });
+        }
+
+        // Rungs between the two backbones.
+        for (let i = 0; i <= count; i += rungEvery) {
+          const p = points[i];
+          const open = Math.abs(p.ad - p.bd);       // 0 when the rung is seen flat-on
+          line(p.ax, p.ay, p.bx, p.by, 1, s.alpha * (0.30 - 0.18 * open));
+        }
+
+        // Backbones: far half first, near half on top with a soft glow under it.
+        const thick = Math.sqrt(s.size);
+        const backbone = (x0, y0, x1, y1, depth, near) => {
+          if (near) line(x0, y0, x1, y1, 9 * depth * thick, s.alpha * 0.10 * depth);
+          line(x0, y0, x1, y1, (0.8 + 2.2 * depth) * thick, s.alpha * (0.14 + 0.76 * depth));
+        };
+        for (const near of [false, true]) {
+          for (let i = 1; i <= count; i++) {
+            const p = points[i - 1], q = points[i];
+            if ((q.ad >= 0.5) === near) backbone(p.ax, p.ay, q.ax, q.ay, q.ad, near);
+            if ((q.bd >= 0.5) === near) backbone(p.bx, p.by, q.bx, q.by, q.bd, near);
+          }
+        }
+      }
+
+      function frame(ms) {
+        ctx.clearRect(0, 0, w, h);
+        ctx.lineCap = 'round';
+        for (const s of strands) drawStrand(s, ms / 1000);
+        if (!reduceMotion.matches) requestAnimationFrame(frame);
+      }
+
+      window.addEventListener('resize', () => {
+        resize();
+        if (reduceMotion.matches) frame(0);
+      });
+      reduceMotion.addEventListener('change', () => requestAnimationFrame(frame));
+
+      resize();
+      requestAnimationFrame(frame);
+    })();
+  </script>
+</body>
+</html>
