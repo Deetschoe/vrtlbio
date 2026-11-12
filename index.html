@@ -14,15 +14,28 @@
     :root {
       --bg: #000;
       --text: #f3f6f1;
-      --green: #1fe000;
       --muted: #8a9386;
+      --green: #1fe000;
       --pad: clamp(1.25rem, 4vw, 3rem);
       color-scheme: dark;
     }
 
+    /* Clicking the logo flips the page to this. */
+    :root[data-theme="light"] {
+      --bg: #fff;
+      --text: #000;
+      --muted: #6a7267;
+      --green: #18c900;
+      color-scheme: light;
+    }
+
     *, *::before, *::after { box-sizing: border-box; }
 
-    html { background: var(--bg); -webkit-text-size-adjust: 100%; }
+    html {
+      background: var(--bg);
+      transition: background-color 0.35s ease;
+      -webkit-text-size-adjust: 100%;
+    }
 
     body {
       margin: 0;
@@ -34,6 +47,7 @@
       color: var(--text);
       font-family: "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
       -webkit-font-smoothing: antialiased;
+      transition: color 0.35s ease;
     }
 
     ::selection { background: var(--green); color: #000; }
@@ -56,7 +70,20 @@
       letter-spacing: -0.02em;
     }
 
-    .brand img { display: block; width: 2.5rem; height: 2.5rem; }
+    .logo {
+      padding: 0;
+      border: 0;
+      border-radius: 50%;
+      background: none;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform 0.2s ease;
+    }
+
+    .logo img { display: block; width: 2.5rem; height: 2.5rem; }
+    .logo:hover { transform: scale(1.08); }
+    .logo:active { transform: scale(0.94); }
+    .logo:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
 
     main {
       align-self: end;
@@ -78,36 +105,52 @@
     }
 
     h1 span { display: block; }
-    h1 .green { color: var(--green); }
+    h1 .green { color: var(--green); transition: color 0.35s ease; }
 
-    .contact { margin: 0; color: var(--muted); font-size: 0.9375rem; line-height: 1.4; }
-    .contact a { color: var(--text); text-decoration: none; }
+    .contact { margin: 0; font-size: 0.9375rem; line-height: 1.5; }
+    .contact span { display: block; color: var(--muted); transition: color 0.35s ease; }
+    .contact a { color: inherit; text-decoration: none; }
     .contact a:hover { color: var(--green); }
     .contact a:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; border-radius: 2px; }
+
+    @media (min-width: 48rem) {
+      .contact { margin-left: auto; text-align: right; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; }
+    }
   </style>
 </head>
 <body>
   <canvas id="strands" aria-hidden="true"></canvas>
 
   <header class="brand">
-    <img src="assets/logo.png" alt="" width="80" height="80">
+    <button class="logo" type="button" aria-label="Invert colors" aria-pressed="false">
+      <img src="assets/logo.png" alt="" width="80" height="80">
+    </button>
     vrtlbio
   </header>
 
   <main>
     <h1><span>Data for</span> <span class="green">virtual cells.</span></h1>
-    <p class="contact">Interested in more? Contact <a href="mailto:dieter@vrtl.bio">dieter@vrtl.bio</a></p>
+    <p class="contact">
+      <span>Inquiries</span>
+      <a href="mailto:dieter@vrtl.bio">dieter@vrtl.bio</a>
+    </p>
   </main>
 
   <script>
-    // Background: slowly turning DNA strands drawn on a canvas.
     (() => {
+      const root = document.documentElement;
       const canvas = document.getElementById('strands');
       const ctx = canvas.getContext('2d');
       const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
       const TAU = Math.PI * 2;
       let w = 0, h = 0;
+      let ink = '31, 224, 0';
 
+      // Background: slowly turning DNA strands.
       // from/to are fractions of the viewport, so every strand starts and ends off screen.
       const strands = [
         { from: [1.10, 0.70], to: [0.30, -0.14], size: 1.00, alpha: 1.00, spin: 0.50, phase: 0.0 },
@@ -125,7 +168,7 @@
       }
 
       function line(x0, y0, x1, y1, width, alpha) {
-        ctx.strokeStyle = `rgba(31, 224, 0, ${alpha})`;
+        ctx.strokeStyle = `rgba(${ink}, ${alpha})`;
         ctx.lineWidth = width;
         ctx.beginPath();
         ctx.moveTo(x0, y0);
@@ -191,6 +234,21 @@
         if (!reduceMotion.matches) requestAnimationFrame(frame);
       }
 
+      // The logo flips the page between black and white. The headline stays green.
+      const logo = document.querySelector('.logo');
+      const themeColor = document.querySelector('meta[name="theme-color"]');
+
+      function applyTheme(light) {
+        if (light) root.dataset.theme = 'light';
+        else delete root.dataset.theme;
+        ink = light ? '22, 168, 0' : '31, 224, 0';
+        logo.setAttribute('aria-pressed', String(light));
+        themeColor.content = light ? '#ffffff' : '#000000';
+        if (reduceMotion.matches) frame(0);
+      }
+
+      logo.addEventListener('click', () => applyTheme(root.dataset.theme !== 'light'));
+
       window.addEventListener('resize', () => {
         resize();
         if (reduceMotion.matches) frame(0);
@@ -198,6 +256,7 @@
       reduceMotion.addEventListener('change', () => requestAnimationFrame(frame));
 
       resize();
+      applyTheme(root.dataset.theme === 'light');
       requestAnimationFrame(frame);
     })();
   </script>
